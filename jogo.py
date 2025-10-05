@@ -1,44 +1,39 @@
-# Mini Roguelike (PgZero-only, ASCII-safe) - shooting + lives + win/lose
-# - Only PgZero, math, random (no pygame)
-# - Menu with Start / Sound ON-OFF / Exit
-# - Hero & enemies animated (idle/walk)
-# - Enemies patrol territory & chase hero
-# - Shooting (SPACE / left click)
-# - Lives: hero dies after 10 enemy touches -> Game Over screen
-# - Win: if all enemies are killed -> Win screen
+
 
 import random
 import math
+from pgzero import music, screen, sounds, keyboard, mouse, keys 
 
 
 _last_mouse_pos = (0, 0)
 def get_mouse_pos():
     return _last_mouse_pos
-def on_mouse_move(pos, rel, buttons):
+
+
+def on_mouse_move(pos, rel=None, buttons=None):
     global _last_mouse_pos
     _last_mouse_pos = pos
 
 TITLE = "Mini Roguelike (ASCII)"
 WIDTH, HEIGHT = 800, 600
 
-
 GAME_STATE = "menu"
 SOUND_ENABLED = True
 game_time = 0.0
 
-# lives / hits
-MAX_HITS = 5
-hero_hits = 0  
 
-# ---- helpers
+MAX_HITS = 10  
+hero_hits = 0
+
+
 def dist2(a, b):
     dx = a[0] - b[0]
     dy = a[1] - b[1]
     return dx * dx + dy * dy
+
 def clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
 
-# ---- audio (safe)
 def safe_music_play(track, loop=True, volume=0.6):
     if not SOUND_ENABLED:
         try:
@@ -51,6 +46,7 @@ def safe_music_play(track, loop=True, volume=0.6):
         music.play(track, loop=loop)
     except Exception:
         pass
+
 def safe_sound_play(name, volume=0.8):
     if not SOUND_ENABLED:
         return
@@ -61,7 +57,7 @@ def safe_sound_play(name, volume=0.8):
     except Exception:
         pass
 
-# ---- animation
+
 class SpriteAnimator:
     def __init__(self, frames, fps=6):
         self.frames = frames[:] if frames else []
@@ -79,7 +75,7 @@ class SpriteAnimator:
         if not self.frames: return ""
         return self.frames[self.i]
 
-from pgzero.actor import Actor  # PgZero built-in
+from pgzero.actor import Actor 
 
 def draw_actor_or_circle(actor, img, x, y, r, color):
     ok = False
@@ -95,7 +91,7 @@ def draw_actor_or_circle(actor, img, x, y, r, color):
         screen.draw.filled_circle((int(x), int(y)), int(r), color)
         screen.draw.circle((int(x), int(y)), int(r), (0, 0, 0))
 
-# ---- entities
+
 class Entity:
     def __init__(self, x, y, anim_idle, anim_walk, speed=120, radius=14, tint=(140,200,240)):
         self.x = float(x); self.y = float(y)
@@ -223,7 +219,7 @@ class Bullet:
         return True
 
 # ---- world
-hero = Hero(WIDTH // 2, HEIGHT // 2)
+hero = None
 enemies = []
 bullets = []
 
@@ -243,7 +239,7 @@ def start_game():
                              chase_radius=random.randint(130, 190),
                              base_speed=random.randint(100, 150),
                              hue=i))
-    safe_music_play("bgm")
+    safe_music_play("noisy_battle")   # música de batalha (gameplay)
 
 # ---- circular buttons (no Rect)
 class CircleButton:
@@ -258,11 +254,18 @@ class CircleButton:
         screen.draw.circle((self.cx, self.cy), self.r, (220,230,240))
         screen.draw.text(self.label, center=(self.cx, self.cy), fontsize=28, color="white")
 
+# --- LAYOUT DO MENU (lado a lado)
+MENU_BTN_Y = 360
+MENU_BTN_R = 60
+MENU_BTN_SPACING = 170  # distância entre centros
+MID_X = WIDTH // 2
+
 menu_buttons = [
-    CircleButton(WIDTH // 2, 270, 60, "Start"),
-    CircleButton(WIDTH // 2, 370, 60, "Sound: ON"),
-    CircleButton(WIDTH // 2, 470, 60, "Exit"),
+    CircleButton(MID_X - MENU_BTN_SPACING, MENU_BTN_Y, MENU_BTN_R, "Start"),
+    CircleButton(MID_X,                    MENU_BTN_Y, MENU_BTN_R, "Sound: ON"),
+    CircleButton(MID_X + MENU_BTN_SPACING, MENU_BTN_Y, MENU_BTN_R, "Exit"),
 ]
+
 def _update_sound_button_label():
     menu_buttons[1].label = f"Sound: {'ON' if SOUND_ENABLED else 'OFF'}"
 
@@ -349,10 +352,10 @@ def draw():
 
 def _draw_menu():
     screen.fill((18,18,22))
-    screen.draw.text("Mini Roguelike", center=(WIDTH//2, 160), fontsize=52, color="white")
+    screen.draw.text("Mini Roguelike", center=(WIDTH//2, 180), fontsize=52, color="white")
     for b in menu_buttons: b.draw()
     screen.draw.text("Controls: WASD / Arrows   Shoot: SPACE or Left Click",
-                     center=(WIDTH//2, 540), fontsize=20, color=(210,210,210))
+                     center=(WIDTH//2, 520), fontsize=20, color=(210,210,210))
 
 def _draw_game():
     screen.fill((22,26,32))
@@ -395,7 +398,8 @@ def on_mouse_down(pos, button):
         if menu_buttons[1].hovered(pos):
             SOUND_ENABLED = not SOUND_ENABLED
             _update_sound_button_label()
-            if SOUND_ENABLED: safe_music_play("bgm")
+            if SOUND_ENABLED:
+                safe_music_play("echoesofeternitymix")  # música do menu
             else:
                 try: music.stop()
                 except Exception: pass
@@ -414,7 +418,7 @@ def on_key_down(key):
     global GAME_STATE
     if key == keys.ESCAPE:
         GAME_STATE = "menu"
-        safe_music_play("bgm")
+        safe_music_play("echoesofeternitymix")  # volta para a música do menu
         return
     if GAME_STATE == "playing":
         if key == keys.SPACE:
@@ -423,7 +427,7 @@ def on_key_down(key):
     elif GAME_STATE in ("win", "gameover"):
         if key in (keys.RETURN, keys.ENTER, keys.SPACE):
             GAME_STATE = "menu"
-            safe_music_play("bgm")
+            safe_music_play("echoesofeternitymix")  # volta menu
 
 # start menu music if available
-safe_music_play("bgm")
+safe_music_play("echoesofeternitymix")  # música do menu ao iniciar
